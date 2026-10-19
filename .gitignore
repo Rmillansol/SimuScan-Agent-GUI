@@ -1,0 +1,175 @@
+############################
+
+# 🔹 ENVIRONMENT AND DEPENDENCIES
+
+############################
+.venv/
+venv/
+env/
+.uv/
+__pypackages__/
+
+############################
+
+# 🔹 PYTHON
+
+############################
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dll
+
+############################
+
+# 🔹 LOCAL CONFIG / SECRETS
+
+############################
+.env
+*.env
+.env.*
+# but DO version the example template:
+!.env.example
+
+############################
+
+# 🔹 UV
+
+############################
+# uv.lock IS committed — required to reproduce the environment with `uv sync`.
+# (Do not ignore it.)
+
+############################
+
+# 🔹 JUPYTER
+
+############################
+.ipynb_checkpoints/
+
+############################
+
+# 🔹 ML MODELS (VERY IMPORTANT)
+
+############################
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.engine
+
+############################
+
+# 🔹 DATASETS AND LARGE DATA
+
+############################
+# Ignore EVERYTHING under data/ (datasets, outputs, libraries, chats, RAG index,
+# heavy STLs) EXCEPT the small assets essential to run the project.
+# Ignore everything under data/* and re-include ONLY the small essential assets.
+# (Comments must be on their own line: .gitignore does not support inline #.)
+data/*
+# Configuration YAMLs (default.yaml, etc.) — essential:
+!data/config/
+# ...but not the throwaway preview snapshot:
+data/config/conf_simuscan/temp.yaml
+# User Python generators — code:
+!data/user_generators/
+
+datasets/
+raw/
+processed/
+
+# AFM / scientific
+
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.gwy
+*.ibw
+
+############################
+
+# 🔹 OUTPUTS / RESULTS
+
+############################
+runs/
+outputs/
+results/
+logs/
+wandb/
+
+############################
+
+# 🔹 GENERATED IMAGES (optional)
+
+############################
+
+# Uncomment if you do not want to upload them
+
+# *.png
+
+# *.jpg
+
+# *.tif
+
+############################
+
+# 🔹 IDEs
+
+############################
+.vscode/
+.idea/
+
+############################
+
+# 🔹 OPERATING SYSTEM
+
+############################
+.DS_Store
+Thumbs.db
+
+############################
+
+# 🔹 BUILD / DISTRIBUTION
+
+############################
+build/
+dist/
+*.egg-info/
+
+############################
+
+# 🔹 TEMPORARY FILES
+
+############################
+*.tmp
+*.log
+src.zip
+*.zip
+
+############################
+# 🔹 SCRATCH / COMPARISON SNAPSHOTS
+############################
+# temp/ is a throwaway copy brought from the microscope PC for comparison.
+# The canonical code lives in src/. The valuable simulation script was copied
+# to simulations/ (tracked). Do not commit temp/.
+temp/
+
+############################
+# 🔹 GDS MASKS AND PAPER DOCUMENTS
+############################
+# GDS masks are pipeline INPUT data, not code. The paper (.docx, incl. the
+# Supplementary Information) lives outside the repo. Keep only code+config+docs.
+*.gds
+*.docx
+
+############################
+
+# 🔹 GIT LFS (optional)
+
+############################
+
+# If you use LFS, comment out these lines above
+
+# and use git lfs track for these files

@@ -1,0 +1,1326 @@
+# ============================================================================
+# SIMUSCAN CONFIGURATION FILE — GRAIN / DOMAIN DATASET
+# Ready-to-run preset for `shape: domains`: a polycrystalline mosaic with one
+# instance mask per grain. Only the `grain` object is enabled; shape the mosaic
+# in `domains_conf:`.
+#
+# THE SUBSTRATE AND THE ARTIFACTS ARE ALL ENABLED, but with amplitudes sized
+# against the grain relief instead of default.yaml's values. That matters here
+# because the grain field is folded into the SUBSTRATE, so substrate texture and
+# artifacts pile straight onto the grains rather than sitting beside them.
+#
+# Reference scale: grains span z_mean 0.5-1.2 with ~0.1-0.3 of relief inside
+# each. Anything in the substrate with an amplitude of 0.3-0.9 is therefore
+# comparable to the whole grain signal and buries it. Measured grain contrast
+# (spread of per-grain mean height / spread within a grain):
+#   default.yaml amplitudes ....... 0.64   grains barely readable
+#   these amplitudes .............. see below
+#   nothing at all ................ the ceiling for this grain distribution
+#
+# Worst offenders, measured one at a time — raise these last:
+#   artifacts.loss_contact_*  -42%  the long horizontal streaks
+#   substrate.dirt_delta_n    -20%  the white speckle; default.yaml fires 10500
+#                                   spikes into a 512x512 frame, i.e. 4% of the
+#                                   pixels. 200 reads as dirt without hiding the
+#                                   grains.
+#   artifacts.delta_n          -6%
+#   everything else            <4%  tilt, perlin, gaussian, PID, line and
+#                                   periodic noise are cheap at these levels.
+# Dirt and spikes are deliberately NOT minimised: they read clearly (~0.5% of the
+# pixels come out as spikes, ~30 grey levels above their surroundings) while the
+# grain contrast stays at 1.01, i.e. the speckle costs nothing here. Two traps
+# when tuning them, both measured:
+#   * `dirt_delta_n` and `delta_n` are UPPER BOUNDS — the code draws
+#     randint(0, n), so on average you get half of what you wrote.
+#   * `delta_intensity` is a maximum of a maximum: a spike's height is
+#     U(0, U(0, delta_intensity) * image_range), so the mean is about a quarter
+#     of the value. Below ~0.4 the spikes simply do not show.
+# Substrate dirt also drags each spike up to `dirt_delta_elongation_max` px in X,
+# which is why it produces far more visible speckle per unit than artifact deltas.
+#
+# Turn any of them up if you want a harder dataset; the grain masks are unaffected
+# either way, they come from the ideal topography before any of this is applied.
+#
+# This file defines the global configuration, AFM tip model, substrate
+# generation, noise and artifact simulation, shape definitions, and object
+# properties used to generate fully labeled synthetic AFM datasets.
+#
+# All parameters are designed to be reproducible via the exported JSON file.
+# ============================================================================
+
+# General dataset configuration
+config:
+  file_name: synthetic_params.json              # JSON file name used to reproduce the dataset
+  dataset_path: ../Dataset                      # Default path to save generated data
+  training_split_ratios: [0.7, 0.2, 0.1]        # Dataset split ratios [Training, Validation, Test]
+  image_size: 512                               # Resolution of generated images (px)
+  n_images: 50                                  # Number of images to generate
+  sigma_smooth_inside_mask: 2.0                 # Smoothing parameter for substrate–object merging (more realistic union)
+  save_instance_map: true                       # Write instances/<split>/<name>.png — uint16 label map, one id per annotated instance (0 = background)
+  save_low_quality_probability: 0.0             # Probability of generating low-resolution replicas
+  simu_size_low_quality: [412, 256, 128, 64]    # Alternative resolutions to consider (px)
+
+# Scanning probe configuration (modeled as a cone ending in a hemispherical tip)
+tip_conf:
+  is_double: false                  # Indicates whether a double-tip effect is allowed
+  double_probability: 1.0           # Probability of a double-tip event per image
+  radi_range: [2, 5]                # Minimum and maximum tip radius
+  eccentrisity_range: [0.9,1.0]     # Tip eccentricity (reserved for future SIMUSCAN versions)
+  theta_range: [10, 30]             # Cone half-angle
+  distance_min_pr1: 0.5             # Minimum distance between primary and secondary tips
+  distance_max_pr1: 1.5             # Maximum distance between the two tips
+
+# Substrate configuration
+substrate_conf:
+  apply_tilt: true                   # Enable tilted plane
+  tilt_probability: 1.0              # Probability of applying substrate tilt
+  tilt_range: 0.10                   # Tilt range — 0.9 (default.yaml) is comparable to the whole grain relief
+  second_order_range: 0.1            # Second-order curvature proportional to ~0.2 * max tilt
+  
+  apply_stair: false                 # Enable step-like features
+  stair_probability: 0.99            # Probability of stair features
+  stair_kind: spline                 # Stair type: polygon (straight lines) or spline (curved)
+  stair_height: [0.3, 0.6]           # Step height range (absolute value)
+
+  apply_pattern: false               # Enable periodic substrate patterns
+  pattern_probability: 0.9           # Probability of including the pattern
+  pattern_type: pillars              # Pattern type: pillars, holes, grating
+  pattern_shape: square              # Pattern shape: circle, square, triangle, hexagon
+  pattern_shape_angle_deg: [30, 31]  # Rotation angle of the pattern shapes
+  pattern_period_x_px_range: [120, 121]   # Pattern period in X (px)
+  pattern_period_y_px_range: [120, 121]   # Pattern period in Y (px)
+  pattern_duty_cycle: [0.2, 0.4]     # Pattern duty cycle (0–1)
+  pattern_slope: [0.3, 0.4]          # Edge slope of the pattern
+  pattern_height: [0.5, 0.9]         # Pattern height range
+  pattern_orientation_deg: [45, 46]  # Pattern orientation
+  pattern_phase_x: [50,51]           # Pattern phase shift in X (px)
+  pattern_phase_y: [50, 51]          # Pattern phase shift in Y (px)
+ 
+  apply_shapes: true                 # Enable random shape-based dirt
+  shapes_probability: 0.9            # Probability of shape generation
+  shapes_n: 3                        # Number of shapes per size
+  shapes_size: [25, 10]              # Shape size (px)
+  shapes_height: [0.06, 0.04]        # Height of each shape — kept under the grain relief
+
+  apply_dirt: true                   # Enable random dirt particles
+  dirt_probability: 0.9              # Probability of dirt appearance
+  dirt_n: 10                         # Number of random dirt objects
+  dirt_size: [25, 10, 5]             # Dirt size (px)
+  dirt_height: [0.08, 0.08, 0.08]    # Maximum height (absolute)
+  dirt_intensity: 0.45               # Dirt intensity (0 = none, 1 = full)
+  dirt_delta_n: 2500                 # UPPER BOUND on the spikes, not a count: the code draws
+                                     # randint(0, dirt_delta_n), so the average is half of it.
+                                     # Each spike is also dragged up to dirt_delta_elongation_max
+                                     # px in X, so this is the knob that actually produces visible
+                                     # speckle. 2500 -> ~0.5% of the pixels read as spikes;
+                                     # default.yaml's 10500 -> ~4%, which buries the grains.
+  dirt_delta_height: 0.25            # Maximum height of each delta (fraction of the image range)
+  dirt_delta_elongation_max: 5       # Extra pixels in X per spike (0 = no elongation)
+  dirt_delta_elongation_decay: 0.5   # Height decay per extra pixel (0–1)
+  dirt_delta_elongation_prob: 1.0    # Probability that each individual spike is elongated (0–1)
+
+  apply_perlin: true                 # Enable correlated Perlin noise
+  perlin_scale_px: [10, 5, 2]        # Spatial correlation length (px)
+  perlin_amplitud: 0.04              # Texture amplitude
+
+  apply_gaussian: true               # Enable Gaussian noise texture
+  gaussian_amplitud: 0.015
+  gaussian_mean: 0.0
+  gaussian_scale: 0.5
+
+  apply_gaussian_filter: false       # Enable Gaussian filtering
+  filter_sigma: 1.0
+
+# Typical AFM artifact configuration
+artifacts_conf:
+  apply_delta: true                  # Enable delta-type noise
+  delta_probability: 0.5             # Probability of delta noise
+  delta_intensity: 0.7               # Noise intensity. Careful: this is a MAXIMUM OF A MAXIMUM —
+                                     # each spike gets U(0, U(0, delta_intensity) * image_range),
+                                     # so the average spike is only ~delta_intensity/4 of the
+                                     # range. Low values here are invisible, not subtle.
+  delta_n: 600                       # UPPER BOUND on affected pixels (randint(0, delta_n))
+
+  apply_gaussian: true
+  gaussian_probability: 0.9          # Probability of Gaussian noise
+  gaussian_scale: 0.008              # Noise amplitude
+
+  apply_loss_contact: true
+  loss_contact_probaility: 0.2       # Probability — these long streaks are the single biggest contrast sink
+  loss_contact_n: 3                  # Number of affected scan lines
+  loss_contact_max_offset: 0.004     # Maximum offset variation
+  loss_contact_max_slope: 0.008      # Maximum slope variation
+
+  apply_adhesion: true
+  local_adhesion_probability: 0.4    # Probability of local adhesion artifacts
+  local_adhesion_intensity: 0.015    # Adhesion strength
+  local_adhesion_pixel_probability: 0.1  # Per-pixel adhesion probability
+
+  apply_sticky_zones: true
+  sticky_zones_probability: 0.2      # Probability of sticky regions
+  sticky_zones_n: 5                  # Number of sticky zones
+  sticky_zones_size_range: [10, 50]  # Size range of sticky zones
+  sticky_zones_intensity: 0.03       # Adhesion intensity
+
+  apply_line_noise: true
+  line_noise_probability: 0.2
+  line_noise_intesity: 0.004
+  line_noise_line_probability: 0.01
+  
+  apply_periodic_noise: true
+  periodic_probability: 0.2          # Probability of periodic noise
+  periodic_freq: 100                 # Periodic noise frequency
+  periodic_amplitud: 0.015           # Noise amplitude
+  periodic_angle_deg_range: [0.0, 90.0]  # Orientation range (degrees)
+
+  apply_shift_lines_noise: true
+  shift_lines_probability: 0.1       # Probability of line-shift noise
+  shift_lines_roe_probability: 0.2   # Probability of a line being shifted
+  shift_lines_max: 2                 # Maximum pixel shift
+
+  apply_flatten: true
+  flatten_perc: 40                   # Percentage of lines used for flattening
+
+# PID feedback simulation (tapping mode AFM)
+pid_conf:
+  apply_pid: true                    # Enable PID simulation
+  pid_probability: 1.0               # Probability of applying PID per image
+  scan_direction: forward            # Scan direction: forward or backward (fixed for whole dataset)
+  # Physical tapping-mode parameters — fixed for the whole dataset
+  A0: 1.0                            # Free oscillation amplitude (a.u.)
+  beta: 1.0                          # Sensitivity of amplitude to tip-sample distance
+  z0: 2.0                            # Characteristic decay distance (a.u.)
+  ASP: 0.5                           # Amplitude setpoint (fraction of A0)
+  # PID control parameters — [min, max] ranges, randomized per image
+  Kp: [2, 2]                         # Proportional gain
+  Ki: [0.01, 0.05]                   # Integral gain
+  Kd: [0.01, 0.1]                    # Derivative gain
+  dt: [1.0, 1.2]                     # Time step per pixel (a.u.)
+  max_speed: [3.0, 4.0]              # Maximum z-actuator speed per step.
+                                     # A tessellation has a height step at EVERY grain
+                                     # boundary, so with default.yaml's 1.4-1.5 the
+                                     # controller cannot keep up and digs deep negative
+                                     # spikes: the middle 98% of the pixels then use only
+                                     # 24% of the saved 0-255 range (54% with PID off,
+                                     # 50% with this value). Do NOT raise Ki to fix it —
+                                     # integral windup sends the max to ~12.
+  stickiness_prob: [0.0, 0.0]        # Per-pixel probability of tip sticking to surface
+  jump_prob: [0.0, 0.0]              # Per-pixel probability of sudden jump event
+  jump_magnitude: [0.05, 0.3]       # Magnitude of jump (a.u.)
+
+
+
+# ============================================================================
+# Grain / domain field generator  (objects with `shape: domains`)
+# ----------------------------------------------------------------------------
+# Produces the IDEAL topography of a polycrystalline / domain mosaic plus one
+# instance mask per visible grain. Everything AFM-like — tip convolution, PID
+# feedback, scanner noise, line artifacts, flattening — is added afterwards by
+# the normal SimuScan pipeline, exactly as for any other object type.
+#
+# UNITS: SimuScan native, like every other section — lateral sizes in PIXELS
+# (`*_px`) and heights in relative height units (~0-1, the same scale as an
+# object's `height`, `dirt_height` or `pattern_height`).
+#
+# GRAIN COUNT is not a parameter; it follows from the frame:
+#     grains ≈ (config.image_size / mean_grain_size_px)^2
+# With image_size 512 and mean_grain_size_px 25 that is ~400 grains per image
+# and ~20 s of generation time. Raise mean_grain_size_px for fewer, bigger,
+# much faster grains.
+# ============================================================================
+domains_conf:
+  # ── SimuScan bridge ────────────────────────────────────────────────────────
+  mode: tessellation             # tessellation (packed mosaic, no gaps) | overlap_interactive (stacked islands + gaps)
+  seed:                          # empty = new grains every image; an integer repeats the same grains
+
+  z_mode: direct                 # direct = use the z_* values below as they are | relative = rescale each image into the object's `height` range
+  z_norm_percentile: 99.5        # percentile of the relief mapped onto `height` (only used by z_mode: relative)
+
+  min_grain_area_px: 0           # drop grains smaller than this (0 = keep every visible grain)
+  max_instances: 0               # cap on instances per image, largest first (0 = no cap)
+  mask_dilate_px: 0              # COCO-time mask dilation; 0 keeps the generator masks exactly as produced
+  min_visible_after_objects: 0.5 # grain masks are clipped under the objects on top; drop a grain that keeps less than this fraction
+  block_other_objects: false     # false = objects sit ON TOP of the film (heights add); true = the film claims the frame and the other objects are rejected
+
+  # ── Grain-size distribution (px) ───────────────────────────────────────────
+  size_distribution: gaussian    # gaussian | lognormal | uniform
+  mean_grain_size_px: 60.0       # mean equivalent grain diameter (~70 grains / 512 px image)
+  grain_size_sigma_px: 18.0      # spread (gaussian / lognormal)
+  grain_size_range_px: [15.0, 35.0]   # [min, max] used when size_distribution is uniform
+
+  # ── XY shape ───────────────────────────────────────────────────────────────
+  eccentricity_range: [0.0, 0.4]       # grain elongation
+  n_sides_range: [4, 8]                # polygon sides — exact in overlap, soft target in tessellation
+  curved_grain_probability: 0.30       # probability a grain is eligible for curved sides
+  curved_side_probability: 0.30        # probability an eligible side becomes curved
+  side_curvature_range: [0.05, 0.50]   # strength of the side bowing
+  shape_irregularity_range: [0.03, 0.12]  # polygon irregularity
+
+  # ── Mean height and its spatial correlation ────────────────────────────────
+  z_mean: [0.5, 1.2]             # range of mean grain heights (height units)
+  neighbor_z_correlation: 0.60   # how strongly neighbouring grains share a mean height (0-1)
+  correlation_length_px: 50.0    # spatial range of that correlation
+  correlation_cutoff_factor: 2.0 # interactions ignored beyond factor * correlation_length_px
+
+  # ── Height modulation around the perimeter ─────────────────────────────────
+  boundary_z_amplitude: [0.05, 0.30]   # amplitude of the perimeter height spline
+  boundary_n_ctrl: 12                  # spline control points around the perimeter
+  boundary_samples: 24                 # perimeter samples fed to the surface fit
+
+  # ── Internal extrema (hills / dips inside each grain) ──────────────────────
+  inner_extrema_count_range: [0, 2]        # number per grain (inclusive)
+  inner_extrema_amplitude: [0.10, 0.35]    # their amplitude (height units)
+  inner_extrema_edge_exclusion_px: 2       # keep them this far from the border
+  inner_extrema_min_distance_px: 5         # minimum spacing between them
+
+  # ── Surface smoothness ─────────────────────────────────────────────────────
+  surface_smoothing: 0.15        # smoothing of the thin-plate RBF surface fit
+  flatness_range: [0.4, 0.8]     # higher = flatter, lower-relief grains
+
+  # ── Per-grain correlated roughness ─────────────────────────────────────────
+  roughness_enabled: true
+  roughness_rms: [0.04, 0.10]            # RMS roughness inside a grain (height units)
+  roughness_corr_length_px: [2.5, 6.0]   # lateral size of the roughness features
+  roughness_edge_taper_px: 0             # >0 suppresses roughness near the grain border
+
+  # ── Directional roughness (one angle shared by all grains of an image) ─────
+  angular_correlation_probability: 0.50      # probability an image uses oriented roughness
+  angular_correlation_angle_range_deg: [0.0, 180.0]  # sampled once per image
+  roughness_anisotropy_ratio: [3.0, 8.0]     # stretch along the preferred direction (1 = isotropic)
+
+  # ── Rounded grain borders in Z ─────────────────────────────────────────────
+  edge_rounding_probability: 0.40            # probability an image uses border rounding
+  edge_rounding_border_fraction: [0.65, 0.90]  # height fraction kept AT the border (1.0 = no drop)
+  edge_rounding_width_px: [2.0, 6.0]         # width of the rounded band
+  edge_rounding_profile: cosine              # cosine | smoothstep
+
+  # ── tessellation only ──────────────────────────────────────────────────────
+  tessellation_relax: 1                  # relaxation iterations (higher = more regular mosaic)
+  tessellation_side_penalty_strength: 0.15  # bias strength toward n_sides_range
+
+  # ── overlap_interactive only ───────────────────────────────────────────────
+  overlap_target: [0.05, 0.20]   # preferred pairwise overlap fraction
+  contact_preference: 1.0        # preference for touching existing grains
+  gap_preference: 0.60           # preference for landing on free background
+  max_placement_trials: 50       # placement attempts per grain
+  coverage_target: [0.90, 0.98]  # covered fraction requested before pruning
+  min_visible_fraction: 0.01     # grains less visible than this are dropped before Z is computed
+
+  # ── Stacking in Z (overlap_interactive) ────────────────────────────────────
+  support_percentile: 75.0       # percentile of the lower topography used as support
+  stack_height_factor: 0.80      # 0 = keep own mean Z, 1 = rise fully to the support level
+
+
+# Defining shapes using straight segments, splines, or function-based methods
+shapes:
+- name: triangle
+  sections:
+  - - type: function
+      call: "regular_polygon(n_sides = 3)"
+- name: square
+  sections:
+  - - type: function
+      call: "regular_polygon(n_sides = 4)"
+- name: pentagon
+  sections:
+  - - type: function
+      call: "regular_polygon(n_sides = 5)"
+- name: hexagon
+  sections:
+  - - type: function
+      call: "regular_polygon(n_sides = 6)"
+- name: ellipse
+  sections:
+  - - type: function
+      call: "ellipse_spline(n_points = 12)"
+- name: oval
+  sections:
+  - - type: line
+      points:
+      - - 0.5
+        - 0.5
+      - - -0.5
+        - 0.5
+    - type: spline
+      points:
+      - - -0.5
+        - 0.5
+      - - -1
+        - 0
+      - - -0.5
+        - -0.5
+    - type: line
+      points:
+      - - -0.5
+        - -0.5
+      - - 0.5
+        - -0.5
+    - type: spline
+      points:
+      - - 0.5
+        - -0.5
+      - - 1
+        - 0
+      - - 0.5
+        - 0.5
+- name: line
+  sections:
+  - - type: line
+      points:
+      - - -1.0
+        - 0.0
+      - - 0.0
+        - 0.0
+    - type: line
+      points:
+      - - 0.0
+        - 0.0
+      - - 1.0
+        - 0.0
+- name: bacillus   
+  sections:
+  - - type: line       #variante 1
+      points:
+      - - 0.5
+        - 0.5
+      - - -0.5
+        - 0.5
+    - type: spline
+      points:
+      - - -0.5
+        - 0.5
+      - - -1
+        - 0
+      - - -0.5
+        - -0.5
+    - type: line
+      points:
+      - - -0.5
+        - -0.5
+      - - 0.5
+        - -0.5
+    - type: spline
+      points:
+      - - 0.5
+        - -0.5
+      - - 1
+        - 0
+      - - 0.5
+        - 0.5
+  - - type: function       #variante 2
+      call: "ellipse_spline(n_points = 12)"
+- name: cocos
+  sections:
+  - - type: function
+      call: "ellipse_spline(n_points = 12)"
+- name: linearDNA
+  sections:
+  - - type: line
+      points:
+      - - -1.0
+        - 0.0
+      - - 0.0
+        - 0.0
+    - type: line
+      points:
+      - - 0.0
+        - 0.0
+      - - 1.0
+        - 0.0
+- name: circularDNA
+  sections:
+  - - type: line
+      points:
+      - - -1.0
+        - 0.0
+      - - 0.0
+        - 0.0
+    - type: line
+      points:
+      - - 0.0
+        - 0.0
+      - - 1.0
+        - 0.0
+- name: star5
+  sections:
+  - - type: line
+      points:
+        - [0, 1]       # Punta arriba
+        - [0.2245, 0.309] 
+    - type: line
+      points:
+        - [0.2245, 0.309]
+        - [0.9511, 0.309] 
+    - type: line
+      points:
+        - [0.9511, 0.309]
+        - [0.3633, -0.118] 
+    - type: line
+      points:
+        - [0.3633, -0.118]
+        - [0.5878, -0.809] 
+    - type: line
+      points:
+        - [0.5878, -0.809]
+        - [0, -0.382] 
+    - type: line
+      points:
+        - [0, -0.382]
+        - [-0.5878, -0.809] 
+    - type: line
+      points:
+        - [-0.5878, -0.809]
+        - [-0.3633, -0.118] 
+    - type: line
+      points:
+        - [-0.3633, -0.118]
+        - [-0.9511, 0.309] 
+    - type: line
+      points:
+        - [-0.9511, 0.309]
+        - [-0.2245, 0.309] 
+    - type: line
+      points:
+        - [-0.2245, 0.309]
+        - [0, 1]       # Cierra estrella
+- name: STL       # This is necessary for compatibility.
+  sections:
+  - - type: line
+      points:
+      - - -1.0
+        - 0.0
+      - - 0.0
+        - 0.0
+    - type: line
+      points:
+      - - 0.0
+        - 0.0
+      - - 1.0
+        - 0.0
+
+# Definition of object properties to be inserted into the image
+objects:
+- label: triangle                             # Label used for training ML models
+  shape: triangle                             # Object shape, must match an entry in the shapes section
+  category: geometric                         # Object category (used for ML labeling)
+  enable: false                               # Indicates whether this object is inserted into images
+  n_objects: 4                                # Number of objects to insert per image
+  probability: 0.7                            # Probability of inserting this object
+  max_overlap: 0.1                            # Maximum allowed overlap between objects (overlapping area)
+  size_shape: [35, 35]                        # Reference object size in X and Y
+  height: [0.8, 1.0]                          # Height range of each object
+  orden_z: [0.0, 0.1]                         # Z-profile range of the object
+  step_perfil_z: [0.0, 0.02]                  # Range of abrupt transition in the Z-profile
+  is_fill: true                               # Indicates whether the object is filled or only an outline
+  variation_border_pct: 0.05                  # Percentage of stochastic variation applied to the object border
+  num_points_border: 12
+  dmax_for_DNA: 2                             # Thickness used when the object represents DNA
+  max_angel_for_DNA: 30                       # Angular dispersion in degrees (DNA case)
+  closed: true                                # Indicates whether the shape is closed or open
+  stl_files:                                  # STL file paths if the object shape is STL-based (list of paths)
+  stl_weights:                                # Weight of each STL file (must sum to 1, e.g. [0.5, 0.5])
+  scale_pct: 0.5                              # Symmetric scale variation of the object
+  eccentricity_variation_up_pct: 0.05         # Eccentricity variation of the object along Y
+  eccentricity_variation_down_pct: -0.05      # Eccentricity variation of the object along X
+  rotation_range_deg: [0, 360]                # Rotation angle range
+  apply_bending: false                        # Enables bending transformation
+  bending_axis: y                             # Bending direction axis
+  bending_amplitud_pct: 0.1                   # Bending amplitude
+  bending_freq: 2                             # Bending frequency (for sinusoidal bending)
+  bending_kind: sin                           # Bending type
+  bending_diff_center: 0.1                    # Range of bending center displacement
+  apply_perlin: true                          # Enables correlated texture inside the object
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false               # Enables complex texture using embedded ellipsoids
+  ellipses_probability: 0.5                   # Probability that an object contains this texture
+  ellipses_relative_radios_range: [0.05, 0.5] # Relative size range of ellipsoids
+  ellipses_num: 10                            # Number of ellipsoids inside the object
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false                         # Indicates whether this object can form colonies
+  colony_probability: 0.25                    # Probability that an image contains a colony
+  colony_realtive_height: 0.1                 # Relative height variation between colony members
+  colony_diff_rotation: 10.0                  # Relative angular variation between colony members
+  colony_relative_center: 0.0                 # Relative displacement of neighboring centers
+  colony_relative_scale_pct: 0.0              # Relative size variation of colony members
+  colony_relative_eccentricity_variation_pct: 0.0 # Relative eccentricity variation
+  colony_min_overlap: 0.05                    # Minimum overlap between neighbors
+  colony_max_overlap: 0.2                     # Maximum overlap between neighbors
+
+
+- label: square
+  shape: square
+  category: geometric
+  enable: false
+  n_objects: 4
+  probability: 0.7
+  max_overlap: 0.1
+  size_shape: [35, 35]
+  height: [0.9, 1.0]
+  orden_z: [0.0, 0.1]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: pentagon
+  shape: pentagon
+  category: geometric
+  enable: false
+  n_objects: 4
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [30, 30]
+  height: [0.5, 1.0]
+  orden_z: [0.1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.0
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: true             
+  colony_probability:  1.0         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: hexagon
+  shape: hexagon
+  category: geometric
+  enable: false
+  n_objects: 4
+  probability: 0.7
+  max_overlap: 0.1
+  size_shape: [35, 35]
+  height: [0.9, 1.0]
+  orden_z: [0.0, 0.1]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.99         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: ellipse
+  shape: ellipse
+  category: geometric
+  enable: false
+  n_objects: 4
+  probability: 0.7
+  max_overlap: 0.1
+  size_shape: [35, 35]
+  height: [0.8, 1.0]
+  orden_z: [0.0, 0.1]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: oval
+  shape: oval
+  category: geometric
+  enable: false
+  n_objects: 4
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [30, 30]
+  height: [0.5, 1.0]
+  orden_z: [0.1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.0
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: true
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: true              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2  
+
+- label: star5
+  shape: star5
+  category: geometric
+  enable: false
+  n_objects: 6
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [35, 35]
+  height: [0.5, 1.0]
+  orden_z: [0.0, 0.1]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: line
+  shape: line
+  category: geometric
+  enable: false
+  n_objects: 4
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [30, 30]
+  height: [0.5, 1.0]
+  orden_z: [0.1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: false
+  variation_border_pct: 0.0
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: false
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: bacillus
+  shape: bacillus
+  category: bacterium
+  enable: false
+  n_objects: 6
+  probability: 1.0
+  max_overlap: 0.2
+  size_shape: [24,12]
+  height: [0.6, 1.0]
+  orden_z: [0.5, 4]
+  step_perfil_z: [0.0, 0.01]
+  is_fill: true
+  variation_border_pct: 0.06
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files: [bacillus2.stl, bacillus2.stl]
+  stl_weights: [0.5, 0.5]
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.1
+  eccentricity_variation_down_pct: -0.1
+  rotation_range_deg: [0, 360]
+  apply_bending: true
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.8
+  apply_perlin: true
+  perlin_scale_px: [2, 3, 5, 10, 20]
+  perlin_amplitud_pct: 0.4
+  apply_ellipses_texture: true
+  ellipses_probability: 0.3
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [-0.3, 0.3]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_noise: false
+  noise_probability: 0.2
+  noise_sigma: 1.0
+  noise_amplitud: 0.02
+  apply_colony: false             
+  colony_probability:  0.6
+  colony_n_objects: [100]        
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 30       
+  colony_relative_center: 0.1        
+  colony_relative_scale_pct: 0.1          
+  colony_relative_eccentricity_variation_pct: 0.1 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: cocos
+  shape: cocos
+  category: bacterium
+  enable: false
+  n_objects: 8
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [20, 20]
+  height: [0.6, 1.0]
+  orden_z: [1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.06
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.6
+  eccentricity_variation_up_pct: 0.06
+  eccentricity_variation_down_pct: -0.06
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.3
+  apply_ellipses_texture: true
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [-0.3, 0.3]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_noise: true
+  noise_probability: 0.2
+  noise_sigma: 1.0
+  noise_amplitud: 0.01
+  apply_colony: true             
+  colony_probability:  0.5 
+  colony_n_objects: [2, 3, 4, 12, 24, 50, 100]        
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 15       
+  colony_relative_center: 0.1        
+  colony_relative_scale_pct: 0.1          
+  colony_relative_eccentricity_variation_pct: 0.1 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2    
+
+- label: linearDNA
+  shape: linearDNA
+  category: DNA
+  enable: false
+  n_objects: 3
+  probability: 1.0
+  max_overlap: 0.0
+  size_shape: [110, 1]
+  height: [0.5, 1.0]
+  orden_z: [0.1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: false
+  variation_border_pct: 0.0
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: false
+  stl_files:
+  stl_weights:
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: circularDNA
+  shape: circularDNA
+  category: DNA
+  enable: false
+  n_objects: 3
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [28, 1]
+  height: [0.8, 1.0]
+  orden_z: [0.1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: false
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files:
+  stl_weights:
+  scale_pct: 0.1
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: false
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: starfish
+  shape: STL
+  category: aquatic
+  enable: false
+  n_objects: 3
+  probability: 0.9
+  max_overlap: 0.0
+  size_shape: [120, 120]
+  height: [0.5, 1.0]
+  orden_z: [0.1, 4]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.03
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files: [starfish.stl]
+  stl_weights: [1.0]
+  scale_pct: 0.9
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: true
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 3
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.08
+  apply_ellipses_texture: true
+  ellipses_probability: 0.2
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: ornl_leaf
+  shape:  STL
+  category: logo
+  enable: false
+  n_objects: 3
+  probability: 1.0
+  max_overlap: 0.0
+  size_shape: [110, 110]
+  height: [0.8, 1.0]
+  orden_z: [0.0, 0.1]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files: [icon_ORNL_v2.stl]
+  stl_weights: [1.0]
+  scale_pct: 0.7
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: ornl_error
+  shape:  STL
+  category: logo
+  enable: false
+  n_objects: 2
+  probability: 1.0
+  max_overlap: 0.0
+  size_shape: [95, 95]
+  height: [0.8, 1.0]
+  orden_z: [0.0, 0.1]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files: [icon_ORNL_error1.stl, icon_ORNL_error2.stl]
+  stl_weights: [0.5, 0.5]
+  scale_pct: 0.7
+  eccentricity_variation_up_pct: 0.05
+  eccentricity_variation_down_pct: -0.05
+  rotation_range_deg: [0, 360]
+  apply_bending: false
+  bending_axis: y
+  bending_amplitud_pct: 0.1
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.1
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20]
+  perlin_amplitud_pct: 0.05
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: DNAOr_tri
+  shape:  STL
+  category: DNA
+  enable: false
+  n_objects: 25
+  probability: 1.0
+  max_overlap: 0.3
+  size_shape: [85,85]
+  height: [0.5, 1.0]
+  orden_z: [0.0, 0.2]
+  step_perfil_z: [0.0, 0.02]
+  is_fill: true
+  variation_border_pct: 0.05
+  num_points_border:
+  dmax_for_DNA: 2
+  max_angel_for_DNA: 30
+  closed: true
+  stl_files: [TriOrigami_2_zone1.stl, TriOrigami_2_zone2.stl, TriOrigami_2_zone3.stl]
+  stl_weights: [0.33, 0.33, 0.33]
+  scale_pct: 0.5
+  eccentricity_variation_up_pct: 0.08
+  eccentricity_variation_down_pct: -0.08
+  rotation_range_deg: [0, 360]
+  apply_bending: true
+  bending_axis: x
+  bending_amplitud_pct: 0.2
+  bending_freq: 2
+  bending_kind: sin
+  bending_diff_center: 0.2
+  apply_perlin: true
+  perlin_scale_px: [2, 5, 10, 20, 30]
+  perlin_amplitud_pct: 0.1
+  apply_ellipses_texture: false
+  ellipses_probability: 0.5
+  ellipses_relative_radios_range: [0.05, 0.5]
+  ellipses_num: 10
+  ellipses_amplitud_range: [0.05, 0.1]
+  ellipses_eccentriciy_range: [0.5, 1.0]
+  ellipses_overlap: 0.2
+  ellipses_shape: dome
+  apply_colony: false              
+  colony_probability:  0.25         
+  colony_realtive_height:  0.1
+  colony_diff_rotation: 10.0       
+  colony_relative_center: 0.0        
+  colony_relative_scale_pct: 0.0          
+  colony_relative_eccentricity_variation_pct: 0.0 
+  colony_min_overlap: 0.05        
+  colony_max_overlap: 0.2   
+
+- label: grain                                # Grain / domain field — see the domains_conf section
+  shape: domains                              # Self-rendered: no entry needed in `shapes:`
+  category: domains
+  enable: true                                # Enabled: every image is a grain mosaic
+  domains_mode:                               # Empty = use domains_conf.mode; set here to override per object
+  probability: 1.0                            # Probability the grain field appears in an image
+  height: [0.8, 1.0]                          # Target relief of the grain field (z_mode: relative)
+  # The parameters below are not used by the domains renderer (geometry, size,
+  # texture and colony settings all live in `domains_conf:`), but ObjectConfig
+  # is a flat dataclass so they are listed here for completeness.
+  n_objects: 0                                # Unused: the grain count follows from the field of view
+  max_overlap: 1.0                            # Unused: grains come out already disjoint
+  size_shape: [0, 0]                          # Unused: see domains_conf.mean_grain_size_nm

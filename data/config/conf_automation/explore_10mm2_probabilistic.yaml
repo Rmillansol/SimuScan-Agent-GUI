@@ -1,0 +1,64 @@
+gallery_dir: C:\Users\Administrator\Documents\UserData\Ruben\2026\July\21th
+gwy_base_name: scan
+scan_direction: forward
+origin_x_um: -604.0
+origin_y_um: -1380.0
+scan_size_um: 50.0
+scan_rate_hz: 2.5
+scan_resolution_px: 256
+grid_n_x: 0
+grid_n_y: 0
+area_to_cover_um: 1000000.0
+overlap_fraction: -0.1
+strategy: probabilistic
+max_jump_um: 270.0
+prob_alpha_init: 1.0
+prob_beta_init: 1.0
+prob_spatial_sigma_um: 90.0
+prob_kappa_uncertainty: 0.6
+prob_lambda_move: 0.018
+prob_epsilon_unknown: 0.1
+prob_negative_update_scale: 1.4
+prob_initial_random_n: 5
+prob_initial_center_radius_um: 200.0
+isolation_max_bbox_overlap: 0.3
+isolation_min_distance_um: 0.0
+yolo_enabled: true
+yolo_model_path: C:\Users\Administrator\Desktop\User Data\Ruben\Appspy\SimuScanAgent_gui\data\out_yolo\20260718_092701_segment\weights\best.pt
+yolo_conf_threshold: 0.7
+yolo_overlap_threshold: 0.3
+border_filter_enabled: true
+target_classes:
+  ellipse:
+    n: 100
+    enabled: true
+  hexagon:
+    n: 100
+    enabled: true
+  square:
+    n: 100
+    enabled: true
+  triangle:
+    n: 10
+    enabled: true
+zoom_enabled: false
+zoom_resolution_px: 512
+zoom_max_rate_hz: 2.0
+zoom_max_size_um: 25.0
+zoom_bbox_factors:
+- min_bbox_um: 5.0
+  factor: 1.5
+- min_bbox_um: 2.0
+  factor: 2.0
+- min_bbox_um: 0.0
+  factor: 3.0
+max_large_frames: 0
+triplet_model_path: C:\Users\Administrator\Desktop\User Data\Ruben\Appspy\SimuScanAgent_gui\data\out_triplet\time_20260721_110306\triplet_encoder.pt
+flatten_perc: 40.0
+gwy_poll_interval_s: 2.0
+stage_auto_range: false
+stage_x_min_um: -10600.0
+stage_x_max_um: 10600.0
+stage_y_min_um: -10600.0
+stage_y_max_um: 10600.0
+stage_edge_margin_um: 500.0

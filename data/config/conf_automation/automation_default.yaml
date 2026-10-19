@@ -1,0 +1,161 @@
+# ============================================================================
+# AUTOMATION DEFAULT CONFIGURATION
+# AFM automated exploration parameters
+#
+# Copy this file and edit your copy — do not modify this default directly.
+# All physical sizes are in micrometres (µm).
+#
+# Three operation modes (yolo_enabled / zoom_enabled):
+#   Mode 1 — Scan only            : yolo_enabled: false
+#   Mode 2 — Scan + detect        : yolo_enabled: true,  zoom_enabled: false
+#   Mode 3 — Scan + detect + zoom : yolo_enabled: true,  zoom_enabled: true
+#
+# Two strategies:
+#   raster        : deterministic grid, supports negative overlap (gap)
+#   probabilistic : adaptive sampling weighted by per-class detection maps
+# ============================================================================
+
+# ── Output / microscope ──────────────────────────────────────────────────────
+# gallery_dir: where Nanosurf Studio saves raw .gwy files.
+# Each session creates exploracion_<timestamp>/ inside this folder.
+gallery_dir     : 'C:\Users\z78\AppData\Local\Nanosurf\Nanosurf Studio\gallery2'
+gwy_base_name   : "scan"
+scan_direction  : "forward"
+
+# ── Scan origin (tip position at session start, in µm) ───────────────────────
+origin_x_um     : -300.0
+origin_y_um     : -300.0
+
+# ── Exploration scan ─────────────────────────────────────────────────────────
+scan_size_um        : 50.0    # frame size in µm
+scan_rate_hz        : 100.0   # line rate (Hz)
+scan_resolution_px  : 256     # pixels per side
+
+# ── Grid definition ───────────────────────────────────────────────────────────
+# grid_n_x / grid_n_y: explicit grid (both > 0 overrides area_to_cover_um)
+# overlap_fraction: fraction of frame size to overlap (negative = gap)
+#   0.1  → 10% overlap  (frames share 5 µm on a 50 µm scan)
+#   0.0  → frames touch edge-to-edge
+#   -0.2 → 20% gap      (10 µm gap between frames on a 50 µm scan)
+# area_to_cover_um: real physical area (µm²) to cover when grid is auto
+#   real covered area = (n*step + scan_size)²  where step = scan_size*(1-overlap)
+grid_n_x            : 0       # 0 = auto from area_to_cover_um
+grid_n_y            : 0       # 0 = auto from area_to_cover_um
+area_to_cover_um    : 10000.0 # µm² — used only when grid_n_x/y are 0
+overlap_fraction    : 0.1
+
+# ── Position strategy ─────────────────────────────────────────────────────────
+# raster        : full grid planned upfront, row-major (by rows, left→right)
+# probabilistic : one position chosen at a time from weighted per-class maps
+#                 requires yolo_enabled: true
+strategy            : "raster"
+
+# ── Probabilistic strategy settings ──────────────────────────────────────────
+# Only used when strategy: probabilistic.
+# NOTE: these defaults are tuned to match the validated Monte-Carlo simulation
+# (active_search_multiclass_simulations.py). The movement penalty in the code is
+# applied to distance expressed in GRID-CELL units (dist / cell_step), so
+# prob_lambda_move uses the same numeric value as the simulation. The µm-based
+# parameters below assume the default frame pitch (~45 µm = 50 µm scan × (1-0.1)):
+#   max_jump_um 270 ≈ 6 cells, spatial_sigma 90 ≈ 2 cells, center_radius 200 ≈ 4.5 cells.
+# If you change scan_size_um / overlap_fraction, rescale these µm values so the
+# equivalent cell counts stay the same.
+max_jump_um                  : 270.0  # max distance between consecutive frames (µm) ≈ 6 cells
+
+# Beta-distribution active search
+prob_alpha_init              : 1.0    # initial alpha (prior belief of presence)
+prob_beta_init               : 1.0    # initial beta  (prior belief of absence)
+prob_spatial_sigma_um        : 90.0   # Gaussian propagation radius for evidence (µm) ≈ 2 cells
+prob_kappa_uncertainty       : 0.6    # uncertainty bonus weight in utility score (sim ~0.55–0.70)
+prob_lambda_move             : 0.018  # movement penalty (per cell of distance; sim baseline)
+prob_epsilon_unknown         : 0.10   # probability of choosing most-uncertain cell (sim)
+prob_negative_update_scale   : 1.4    # weight of negative evidence (no detection) (sim)
+prob_initial_random_n        : 5      # random scans near center before active search (sim)
+prob_initial_center_radius_um: 200.0  # radius for those initial random scans (µm) ≈ 4.5 cells
+
+# Isolation filter — applied post-NMS; non-isolated objects update maps but
+# do not count toward found[class] and do not trigger zoom.
+isolation_max_bbox_overlap   : 0.3    # max bbox area overlap fraction (0 = off)
+isolation_min_distance_um    : 0.0    # min center-to-center distance (µm, 0 = off)
+
+# ── YOLO inference ────────────────────────────────────────────────────────────
+yolo_enabled            : false
+yolo_model_path         : ''
+yolo_conf_threshold     : 0.7
+yolo_overlap_threshold  : 0.3
+
+# Border filter — detections whose bbox touches a frame edge are cut-off, so their
+# shape is unreliable: they do NOT count toward targets, the library, or zoom/crops.
+# But if YOLO still detected them and >~50% of the object is visible (judged from the
+# bbox aspect relative to the cut edge), they DO feed the probabilistic map, so it is
+# not biased toward "empty" at frame edges. Thin slivers at the edge are dropped.
+# false = count edge-touching detections for everything. (Rejected draw in red.)
+border_filter_enabled   : true
+
+# target_classes: which classes to search and how many captures per class.
+# Empty dict means all classes in the loaded model with n=10 each.
+# When yolo_model_path is set, this is auto-populated by the agent.
+# enabled: false temporarily skips a class without deleting it.
+# Example:
+#   target_classes:
+#     hexagon:  {n: 10, enabled: true}
+#     square:   {n: 5,  enabled: true}
+#     triangle: {n: 10, enabled: false}
+target_classes          : {}
+
+# ── Zoom scan ─────────────────────────────────────────────────────────────────
+zoom_enabled        : false
+zoom_resolution_px  : 512
+zoom_max_rate_hz    : 2.0     # scan rate is clamped to this value
+zoom_max_size_um    : 25.0    # hard cap on zoom frame size (µm)
+
+# zoom_bbox_factors: zoom frame size = factor × max(bbox_w, bbox_h)
+# Evaluated from largest min_bbox_um downward.
+# Default rules:
+#   bbox > 5 µm  → ×1.5
+#   bbox > 2 µm  → ×2.0
+#   bbox ≤ 2 µm  → ×3.0
+zoom_bbox_factors:
+  - {min_bbox_um: 5.0, factor: 1.5}
+  - {min_bbox_um: 2.0, factor: 2.0}
+  - {min_bbox_um: 0.0, factor: 3.0}
+
+# ── Stopping criterion ────────────────────────────────────────────────────────
+# raster        : the full square grid is always scanned; max_large_frames does
+#                 NOT cut it short. Ends when the grid is done (or all enabled
+#                 target_classes reach their n).
+# probabilistic : max_large_frames is the stop condition — exploration ends after
+#                 this many frames (or earlier if all target_classes reach n).
+#                 Set 0 (or negative) for no frame limit — only target n / manual
+#                 stop end the run (use with care: unreachable targets never stop).
+max_large_frames    : 1000
+
+# ── Triplet analysis (optional) ──────────────────────────────────────────────
+triplet_model_path  : ''
+
+# ── Image processing ─────────────────────────────────────────────────────────
+flatten_perc        : 40.0
+
+# ── GWY file waiting ─────────────────────────────────────────────────────────
+# The wait timeout is computed automatically per frame from scan_resolution_px
+# and scan_rate_hz (~2×lines/rate + 15% margin), so it scales with the scan.
+# Only the poll interval is configurable.
+gwy_poll_interval_s : 2.0
+
+# ── Stage travel limits ───────────────────────────────────────────────────────
+# The sample positioner stalls / never arrives at the very edge of its travel,
+# so frames placed there time out. At planning time the grid is clipped to the
+# stage's reachable rectangle (minus a safety margin) so no unreachable frame is
+# ever queued. Bounds are in the same coordinate frame as origin_x_um/origin_y_um.
+#   stage_auto_range: true  → read the range from the hardware at connect.
+#   If the read fails (or it is false), the explicit stage_*_um bounds are used.
+#   Leave the bounds at 0 (max <= min) to disable clipping when the range is
+#   unknown. (Nanosurf Studio does not expose the stage range to Python, so
+#   auto_range is left off and the bounds below are set to this instrument's
+#   stage: symmetric ±10.6 mm travel, centred at 0.)
+stage_auto_range     : false
+stage_x_min_um       : -10600.0
+stage_x_max_um       : 10600.0
+stage_y_min_um       : -10600.0
+stage_y_max_um       : 10600.0
+stage_edge_margin_um : 500.0   # keep frames this far from the hard travel limit
