@@ -199,29 +199,7 @@ The first run may take a moment while it indexes the documentation (RAG).
 
 ---
 
-## 8. Developer options
-
-**Spanish ↔ English translate panel** (dev only). A floating window where you
-type in Spanish; it is translated to English, typed into the chat (typewriter
-effect) and sent automatically. Every agent reply is translated back to Spanish
-and shown in the same window.
-
-Enable it with an environment variable (auto-opens on launch):
-
-```powershell
-$env:SIMUSCAN_DEV_TRANSLATE = "1"
-uv run python main_gui.py
-```
-
-Or open it any time from **⚙ Settings → 🌐 Dev: Spanish ↔ English panel**.
-
-- Translation uses the OpenAI API; override the model with
-  `SIMUSCAN_TRANSLATE_MODEL` (default `gpt-4o-mini`).
-- It only translates while the panel is open (no token spend when closed).
-
----
-
-## 9. Notes
+## 8. Notes
 
 - Reproducible environment via `uv.lock`; don't hand-edit versions unless needed.
 - On Linux, `uv sync` resolves torch from PyPI with CUDA (without the cu124 index).
